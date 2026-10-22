@@ -1,0 +1,18 @@
+#!/bin/bash
+# Pinokio supervisor: keep a single instance running, restart it if it exits.
+#
+# Differs from the stock upstream wrapper in two ways:
+#   * no --disable-gpu / --disable-software-rasterizer (GPU acceleration stays
+#     enabled; the app.asar is patched so Electron does not disable it either)
+#   * single-instance handling lives in start-pinokio.sh (flock + pgrep)
+#
+# Autostart, the application menu and the desktop entry all call this.
+set -u
+
+while true; do
+  /usr/bin/start-pinokio.sh ${PINOKIO_CLI:-} "$@"
+
+  # start-pinokio.sh exits immediately when another instance already holds the
+  # lock. Only wait for a restart if this process actually launched the app.
+  sleep 2
+done

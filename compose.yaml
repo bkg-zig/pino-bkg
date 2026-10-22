@@ -1,0 +1,70 @@
+# Pinokio home-server stack: Pinokio + a bore tunnel to its own web UI.
+#
+# The tunnel points at port 3002 inside the container, which is an nginx
+# reverse proxy (basic-auth protected) in front of Pinokio's web UI on
+# 127.0.0.1:42000. The streamed X11 desktop on 3000/3001 is still available on
+# the LAN, but it is not what gets published.
+#
+# Start:   ./start.sh
+# URL:     ./scripts/tunnel-url.sh
+name: pinokio
+
+services:
+  pinokio:
+    image: ${PINOKIO_IMAGE:-pinokio-home:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-joly0/pinokio-docker:latest}
+        PINOKIO_VERSION: ${PINOKIO_VERSION:-}
+    container_name: pinokio
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Etc/UTC}
+      # Basic auth for both the desktop and the tunneled UI. Set PASSWORD!
+      CUSTOM_USER: ${CUSTOM_USER:-abc}
+      PASSWORD: ${PASSWORD:?set PASSWORD in .env (cp .env.example .env)}
+      TITLE: ${TITLE:-Pinokio}
+      PINOKIO_SHARE_LOCAL: ${PINOKIO_SHARE_LOCAL:-true}
+      PINOKIO_SHARE_LOCAL_PORT: ${PINOKIO_SHARE_LOCAL_PORT:-50000}
+      START_DOCKER: "false"
+    ports:
+      - "3000:3000"   # streamed desktop, HTTP  (LAN)
+      - "3001:3001"   # streamed desktop, HTTPS (LAN)
+      - "3002:3002"   # Pinokio web UI through the auth proxy (tunnel target)
+    volumes:
+      - ${CONFIG_PATH:-./config}:/config
+    # GPU passthrough via the NVIDIA container toolkit (`--gpus all`).
+    # Requires the toolkit on the host; see the README. Remove this block if
+    # the host has no NVIDIA GPU.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    shm_size: "1gb"
+    security_opt:
+      - seccomp:unconfined
+    restart: unless-stopped
+
+  bore:
+    image: docker.io/ekzhang/bore:latest
+    container_name: pinokio-bore
+    depends_on:
+      - pinokio
+    # Tunnels the auth-protected Pinokio UI (3002) out through bore.pub.
+    # BORE_PORT pins the public port so the URL stays stable; 0 = random.
+    command:
+      - local
+      - "3002"
+      - --local-host
+      - pinokio
+      - --to
+      - "${BORE_SERVER:-bore.pub}"
+      - --port
+      - "${BORE_PORT:-0}"
+    restart: unless-stopped

@@ -1,0 +1,6 @@
+# deployment data and secrets
+.env
+config/
+
+# build leftovers
+*.repacked

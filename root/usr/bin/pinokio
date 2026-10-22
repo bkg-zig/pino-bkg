@@ -1,0 +1,3 @@
+#!/bin/bash
+# Delegate /opt/Pinokio/pinokio to the supervised launcher.
+exec /usr/bin/wrapped-pinokio "$@"
